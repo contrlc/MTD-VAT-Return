@@ -105,3 +105,5 @@ venv.bak/
 
 # credentials file - contains secrets we don't want publishing
 src/credentials.txt
+.project
+.pydevproject
