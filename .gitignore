@@ -102,3 +102,6 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# credentials file - contains secrets we don't want publishing
+src/credentials.txt
