@@ -1,7 +1,7 @@
 '''
 Created on 4 Nov 2018
 
-@author: Steve Webster, Barnaby Park
+@authors: Steve Webster, Barnaby Park
 
     Copyright 2018, 2019 Dhryrock Technologies Limited
     
@@ -24,10 +24,39 @@ from optparse import OptionParser
 from requests_oauthlib import OAuth2Session
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
-from selenium.common.exceptions import NoAlertPresentException
 from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import ElementClickInterceptedException
+from selenium.common.exceptions import ElementNotInteractableException
+from selenium.common.exceptions import ElementNotSelectableException
+from selenium.common.exceptions import ElementNotVisibleException
+from selenium.common.exceptions import ErrorInResponseException
+from selenium.common.exceptions import ImeActivationFailedException
+from selenium.common.exceptions import ImeNotAvailableException
+from selenium.common.exceptions import InsecureCertificateException
+from selenium.common.exceptions import InvalidArgumentException
+from selenium.common.exceptions import InvalidCookieDomainException
+from selenium.common.exceptions import InvalidCoordinatesException
+from selenium.common.exceptions import InvalidElementStateException
+from selenium.common.exceptions import InvalidSelectorException
+from selenium.common.exceptions import InvalidSessionIdException
+from selenium.common.exceptions import InvalidSwitchToTargetException
+from selenium.common.exceptions import JavascriptException
+from selenium.common.exceptions import MoveTargetOutOfBoundsException
+from selenium.common.exceptions import NoAlertPresentException
+from selenium.common.exceptions import NoSuchAttributeException
+from selenium.common.exceptions import NoSuchCookieException
+from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchFrameException
+from selenium.common.exceptions import NoSuchWindowException
+from selenium.common.exceptions import RemoteDriverServerException
+from selenium.common.exceptions import ScreenshotException
+from selenium.common.exceptions import SessionNotCreatedException
+from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import UnableToSetCookieException
+from selenium.common.exceptions import UnexpectedAlertPresentException
+from selenium.common.exceptions import UnexpectedTagNameException
+from selenium.common.exceptions import UnknownMethodException
 import platform
 import json
 import urllib
@@ -41,9 +70,6 @@ import re
 VERSION = '1.0'
 
 redirect_uri = "urn:ietf:wg:oauth:2.0:oob:auto"
-authorization_url = 'https://test-api.service.hmrc.gov.uk/oauth/authorize'
-token_url = 'https://test-api.service.hmrc.gov.uk/oauth/token'
-api_url = "https://test-api.service.hmrc.gov.uk/organisations/vat/"
 
 def get_mac_addresses(family):
     for snics in psutil.net_if_addrs().items():
@@ -53,19 +79,19 @@ def get_mac_addresses(family):
                     if snicaddr.family == family:
                         yield snicaddr.address
 
-def readCredentialsData(filepathname, periodKey):
+def readCredentialsData(filepathname, periodKey, filename, opt):
     # credentials text file is 3 lines long and contains the following credentials 
     if platform.system() == "Windows":            
         idx = filepathname.rfind("\\")
     else:
         idx = filepathname.rfind("/")        
-    filename = "credentials.txt"
     dstpathname = filepathname[:idx+1] + filename
     # open file
     try:
         f= open(dstpathname,"r")
     except IOError as e:
-        print ("file " + dstpathname + "I/O error({0}): {1}".format(e.errno, e.strerror))
+        if opt.DEBUG:
+            print ("file " + dstpathname + "I/O error({0}): {1}".format(e.errno, e.strerror))
         error = "ERROR: failed to open credentials file, error=" + e.strerror
         saveResult(filepathname, 400, periodKey, error, "", "", "")
         return "", "", ""
@@ -80,7 +106,7 @@ def readCredentialsData(filepathname, periodKey):
         f.close()
         return client_id, client_secret, server_token  
     
-def fileReturn(periodKey, vatDueSales, vatDueAcquisitions, totalVatDue, vatReclaimedCurrPeriod, netVatDue, totalValueSalesExVAT, totalValuePurchasesExVAT, totalValueGoodsSuppliedExVAT, totalAcquisitionsExVAT, VATReg, access_token):
+def fileReturn(periodKey, vatDueSales, vatDueAcquisitions, totalVatDue, vatReclaimedCurrPeriod, netVatDue, totalValueSalesExVAT, totalValuePurchasesExVAT, totalValueGoodsSuppliedExVAT, totalAcquisitionsExVAT, VATReg, access_token, api_url, opt):
     # convert period key
     if periodKey == "Q1":
         period = "Q001"
@@ -92,7 +118,8 @@ def fileReturn(periodKey, vatDueSales, vatDueAcquisitions, totalVatDue, vatRecla
         period = "Q004"    
     print(VATReg)
     args = "periodKey="+period+", vatDueSales="+vatDueSales+", vatDueAcquisitions="+vatDueAcquisitions+", totalVatDue="+totalVatDue+", vatReclaimedCurrPeriod="+vatReclaimedCurrPeriod+", netVatDue="+netVatDue+", totalValueSalesExVAT="+totalValueSalesExVAT+", totalValuePurchasesExVAT="+totalValuePurchasesExVAT+", totalValueGoodsSuppliedExVAT="+totalValueGoodsSuppliedExVAT+", totalAcquisitionsExVAT="+totalAcquisitionsExVAT+", VATReg="+VATReg
-    print (args)
+    if opt.DEBUG:
+        print (args)
     
     post_data = {
       "periodKey": period,
@@ -163,10 +190,11 @@ def fileReturn(periodKey, vatDueSales, vatDueAcquisitions, totalVatDue, vatRecla
                       headers=payload,
                       data=json.dumps(post_data))
 
-    print ("http status = " + str(r.status_code))
+    if opt.DEBUG:
+        print ("http status = " + str(r.status_code))
     return r.status_code, r.text
 
-def access_token_request(auth, client_id, client_secret):
+def access_token_request(auth, client_id, client_secret, token_url):
     post_data = {'grant_type': 'authorization_code',
                  'code': auth,
                  'client_id' : client_id,
@@ -177,7 +205,7 @@ def access_token_request(auth, client_id, client_secret):
     token_json = response.json()
     return token_json, response.status_code
 
-def authorization_request(uri, client_id):
+def authorization_request(uri, client_id, opt):
     scope=[('write:vat'), ('read:vat')]
     oauth = OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scope)
     authorization_url, state = oauth.authorization_url(uri)
@@ -186,10 +214,23 @@ def authorization_request(uri, client_id):
     if platform.system() == "Windows":            
         options.binary_location = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
     else:
-        options.binary_location = "/usr/bin/google-chrome"
+        options.binary_location = "/usr/bin/chromium-browser"
     options.add_argument('--no-sandbox')
     driver = webdriver.Chrome(chrome_options=options)
     driver.get(authorization_url)
+    # check for illegal client_id 
+    if driver.title.find(""):
+        if opt.DEBUG:
+            print (driver.page_source)
+        source = driver.page_source.split(">{")
+        msg = source[1].split("}<")
+        # strip out state info, not useful to user
+        source = msg[0].split(",\"state")
+        if opt.DEBUG:
+            print (source[0])
+        # close browser
+        driver.quit()
+        return "ERROR: " + source[0]
     try:
         element = WebDriverWait(driver, 60).until(lambda x: 'Success code=' in driver.title or 'Denied error=' in driver.title)
         if element:
@@ -199,23 +240,79 @@ def authorization_request(uri, client_id):
             driver.quit()
             return "ERROR: Failed to get Authorisation code"
     except NoAlertPresentException:
-        # close browser
-        driver.quit()
-        return "ERROR: Autorisation request timed out"
+        return "ERROR: Happens when you switch to no presented alert."
     except WebDriverException:
-        # close browser
-        driver.quit()
-        return "ERROR: Browser was closed"
-    except:
-        # close browser
-        driver.quit()
+        return "ERROR:Browser was closed"
+    except ElementClickInterceptedException:
+        return "ERROR: The Element Click command could not be completed because the element receiving the events is obscuring the element that was requested clicked."
+    except ElementNotInteractableException:
+        return "ERROR: Thrown when an element is present in the DOM but interactions with that element will hit another element do to paint order"
+    except ElementNotSelectableException:
+        return "ERROR: Thrown when trying to select an unselectable element."
+    except ElementNotVisibleException:
+        return "ERROR: Thrown when an element is present on the DOM, but it is not visible, and so is not able to be interacted with."
+    except ErrorInResponseException:
+        return "ERROR: Thrown when an error has occurred on the server side."
+    except ImeActivationFailedException:
+        return "ERROR: Thrown when activating an IME engine has failed."
+    except ImeNotAvailableException:
+        return "ERROR: Thrown when IME support is not available. This exception is thrown for every IME-related method call if IME support is not available on the machine."
+    except InsecureCertificateException:
+        return "ERROR: Navigation caused the user agent to hit a certificate warning, which is usually the result of an expired or invalid TLS certificate."
+    except InvalidArgumentException:
+        return "ERROR: The arguments passed to a command are either invalid or malformed."
+    except InvalidCookieDomainException:
+        return "ERROR: Thrown when attempting to add a cookie under a different domain than the current URL."
+    except InvalidCoordinatesException:
+        return "ERROR: The coordinates provided to an interactions operation are invalid."
+    except InvalidElementStateException:
+        return "ERROR: Thrown when a command could not be completed because the element is in an invalid state."
+    except InvalidSelectorException:
+        return "ERROR: Thrown when the selector which is used to find an element does not return a WebElement. Currently this only happens when the selector is an xpath expression and it is either syntactically invalid (i.e. it is not a xpath expression) or the expression does not select WebElements (e.g. “count(//input)”)."
+    except InvalidSessionIdException:
+        return "ERROR: Occurs if the given session id is not in the list of active sessions, meaning the session either does not exist or that it’s not active."
+    except InvalidSwitchToTargetException:
+        return "ERROR: Thrown when frame or window target to be switched doesn’t exist."
+    except JavascriptException:
+        return "ERROR: An error occurred while executing JavaScript supplied by the user."
+    except MoveTargetOutOfBoundsException:
+        return "ERROR: Thrown when the target provided to the ActionsChains move() method is invalid, i.e. out of document."
+    except NoAlertPresentException:
+        return "ERROR: Thrown when switching to no presented alert."
+    except NoSuchAttributeException:
+        return "ERROR: Thrown when the attribute of element could not be found."
+    except NoSuchCookieException:
+        return "ERROR: No cookie matching the given path name was found amongst the associated cookies of the current browsing context’s active document."
+    except NoSuchElementException:
+        return "ERROR: Thrown when element could not be found."
+    except NoSuchFrameException:
+        return "ERROR: Thrown when frame target to be switched doesn’t exist."
+    except NoSuchWindowException:
+        return "ERROR: Thrown when window target to be switched doesn’t exist."
+    except RemoteDriverServerException:
+        return "ERROR: RemoteDriverServerException"
+    except ScreenshotException:
+        return "ERROR: A screen capture was made impossible."
+    except SessionNotCreatedException:
+        return "ERROR: A new session could not be created."
+    except StaleElementReferenceException:
+        return "ERROR: Thrown when a reference to an element is now “stale”."
+    except TimeoutException:
         return "ERROR: Autorisation request timed out"
-        
+    except UnableToSetCookieException:
+        return "ERROR: Thrown when a driver fails to set a cookie."
+    except UnexpectedAlertPresentException:
+        return "ERROR: Thrown when an unexpected alert is appeared."
+    except UnexpectedTagNameException:
+        return "ERROR: Thrown when a support class did not get an expected web element."
+    except UnknownMethodException:
+        return "ERROR: The requested command matched a known URL but did not match an method for that URL."
     finally:
         # close browser
         driver.quit()
 
-    print ("auth code = " + str(auth_code))
+    if opt.DEBUG:
+        print ("auth code = " + str(auth_code))
     # return auth code
     return auth_code
 
@@ -249,8 +346,10 @@ def saveResult(filepathname, status, periodKey, processingDate, paymentIndicator
 def main(argv):
     parser = OptionParser(usage="%prog [options] periodKey, vatDueSales, vatDueAcquisitions, totalVatDue, vatReclaimedCurrPeriod, netVatDue, totalValueSalesExVAT, totalValuePurchasesExVAT, totalValueGoodsSuppliedExVAT, totalAcquisitionsExVAT, VATReg filepathname\n", version="%prog " + VERSION)
     parser.add_option('-d', '--debug', dest='DEBUG', default=False, action='store_true', help='print information to help debug the script [default: %default]')
-
+    parser.add_option('-s', '--sandbox', dest='SANDBOX', default=False, action='store_true', help='HMRC sandbox mode for testing the script [default: %default]')
+    
     opt, args = parser.parse_args(argv[1:])
+
     if len(args) != 12:
         parser.print_help()
         return "ERROR: invalid number of arguments=" + str(len(args))
@@ -301,22 +400,36 @@ def main(argv):
         except:
             parser.print_help()
             return saveResult(filepathname, 400, "Q1", "ERROR: invalid number of arguments", "", "", "")
-#    print_args = "periodKey="+periodKey+", vatDueSales="+vatDueSales+", vatDueAcquisitions="+vatDueAcquisitions+", totalVatDue="+totalVatDue+", vatReclaimedCurrPeriod="+vatReclaimedCurrPeriod+", netVatDue="+netVatDue+", totalValueSalesExVAT="+totalValueSalesExVAT+", totalValuePurchasesExVAT="+totalValuePurchasesExVAT+", totalValueGoodsSuppliedExVAT="+totalValueGoodsSuppliedExVAT+", totalAcquisitionsExVAT="+totalAcquisitionsExVAT+", VATReg="+VATReg+", filepathname=",filepathname
-#    print (print_args)       
+    if opt.DEBUG:
+        print_args = "periodKey="+periodKey+", vatDueSales="+vatDueSales+", vatDueAcquisitions="+vatDueAcquisitions+", totalVatDue="+totalVatDue+", vatReclaimedCurrPeriod="+vatReclaimedCurrPeriod+", netVatDue="+netVatDue+", totalValueSalesExVAT="+totalValueSalesExVAT+", totalValuePurchasesExVAT="+totalValuePurchasesExVAT+", totalValueGoodsSuppliedExVAT="+totalValueGoodsSuppliedExVAT+", totalAcquisitionsExVAT="+totalAcquisitionsExVAT+", VATReg="+VATReg+", filepathname=",filepathname
+        print (print_args)       
+    # extract filename/path
     filepathname = urllib.parse.unquote(filepathname)
     filepathname = filepathname.strip("file:")
-    # get credential data
-    client_id, client_secret, server_token = readCredentialsData(filepathname, periodKey)
+    # check which mode script is running in
+    if opt.SANDBOX:
+        authorization_url = 'https://test-api.service.hmrc.gov.uk/oauth/authorize'
+        token_url = 'https://test-api.service.hmrc.gov.uk/oauth/token'
+        api_url = "https://test-api.service.hmrc.gov.uk/organisations/vat/"
+        # get credential data
+        client_id, client_secret, server_token = readCredentialsData(filepathname, periodKey, "sandbox_credentials.txt", opt)
+    else:
+        authorization_url = 'https://api.service.hmrc.gov.uk/oauth/authorize'
+        token_url = 'https://api.service.hmrc.gov.uk/oauth/token'
+        api_url = "https://api.service.hmrc.gov.uk/organisations/vat/"
+        # get credential data
+        client_id, client_secret, server_token = readCredentialsData(filepathname, periodKey, "prod_credentials.txt", opt)
+    # check for valid client_id
     if not client_id:
-        return
+        return saveResult(filepathname, 400, "invalid client_id", "", "", "", "")
     #authorization request
-    auth = authorization_request(authorization_url, client_id)
+    auth = authorization_request(authorization_url, client_id, opt)
     # check authorisation was successful
     if auth.find("ERROR") != -1 or auth.find("Denied error") != -1:
         # exit returning error string
         return saveResult(filepathname, 400, auth, "", "", "", "")
     #get access token
-    access_token, status_code = access_token_request(auth, client_id, client_secret)
+    access_token, status_code = access_token_request(auth, client_id, client_secret, token_url)
     if status_code >= 400:
         desc = access_token[u'error_description']
         err = access_token[u'error']
@@ -324,10 +437,11 @@ def main(argv):
 #    print ('access token = ' + access_token[u'access_token'])
     access_token = access_token[u'access_token']
     #send VAT return
-    status, text = fileReturn(periodKey, vatDueSales, vatDueAcquisitions, totalVatDue, vatReclaimedCurrPeriod, netVatDue, totalValueSalesExVAT, totalValuePurchasesExVAT, totalValueGoodsSuppliedExVAT, totalAcquisitionsExVAT, VATReg, access_token)
+    status, text = fileReturn(periodKey, vatDueSales, vatDueAcquisitions, totalVatDue, vatReclaimedCurrPeriod, netVatDue, totalValueSalesExVAT, totalValuePurchasesExVAT, totalValueGoodsSuppliedExVAT, totalAcquisitionsExVAT, VATReg, access_token, api_url, opt)
     # convert unicode string to dictionary
     d = ast.literal_eval(text)        
-    print (text)
+    if opt.DEBUG:
+        print (text)
     # check status code
     if status >=200 and status < 300:
         # extract values from message
