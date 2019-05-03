@@ -1,0 +1,146 @@
+Sub PushButton_Click()
+Rem  *****  BASIC  *****
+    Dim vatDueSales, vatDueAcquisitions, totalVatDue, vatReclaimedCurrPeriod, netVatDue As String
+    Dim totalValueSalesExVAT, totalValuePurchasesExVAT, totalValueGoodsSuppliedExVAT, totalAcquisitionsExVAT As String
+    Dim scheme, periodKey, VATReg, params As String
+    Dim FileNum As Integer
+    Dim status, period, processingDate, paymentIndicator, formBundleNumber, chargeRefNumber As String
+' get results file path
+    resultFilePath = ActiveWorkbook.Path + "\filingResults.txt"
+' delete old results files
+    If Len(Dir$(resultFilePath)) > 0 Then
+        SetAttr resultFilePath, vbNormal
+        Kill resultFilePath
+    End If
+'get VAT scheme to report
+    scheme = ActiveWorkbook.Sheets("MTD").Range("H4").Value
+    If StrComp(scheme, "Standard") = 0 Then
+'get the Standard scheme VAT return data
+        vatDueSales = ActiveWorkbook.Sheets("MTD").Range("G12").Value
+        vatDueAcquisitions = ActiveWorkbook.Sheets("MTD").Range("G14").Value
+        totalVatDue = ActiveWorkbook.Sheets("MTD").Range("G17").Value
+        vatReclaimedCurrPeriod = ActiveWorkbook.Sheets("MTD").Range("G19").Value
+        netVatDue = ActiveWorkbook.Sheets("MTD").Range("G22").Value
+        totalValueSalesExVAT = ActiveWorkbook.Sheets("MTD").Range("G25").Value
+        totalValuePurchasesExVAT = ActiveWorkbook.Sheets("MTD").Range("G28").Value
+        totalValueGoodsSuppliedExVAT = ActiveWorkbook.Sheets("MTD").Range("G31").Value
+        totalAcquisitionsExVAT = ActiveWorkbook.Sheets("MTD").Range("G34").Value
+    Else
+'get the Standard scheme VAT return data
+        vatDueSales = ActiveWorkbook.Sheets("MTD").Range("I12").Value
+        vatDueAcquisitions = ActiveWorkbook.Sheets("MTD").Range("I14").Value
+        totalVatDue = ActiveWorkbook.Sheets("MTD").Range("I17").Value
+        vatReclaimedCurrPeriod = ActiveWorkbook.Sheets("MTD").Range("I19").Value
+        netVatDue = ActiveWorkbook.Sheets("MTD").Range("I22").Value
+        totalValueSalesExVAT = ActiveWorkbook.Sheets("MTD").Range("I25").Value
+        totalValuePurchasesExVAT = ActiveWorkbook.Sheets("MTD").Range("I28").Value
+        totalValueGoodsSuppliedExVAT = ActiveWorkbook.Sheets("MTD").Range("I31").Value
+        totalAcquisitionsExVAT = ActiveWorkbook.Sheets("MTD").Range("I34").Value
+    End If
+'get VAT period
+    periodKey = ActiveWorkbook.Sheets("MTD").Range("H2").Value
+'get company data
+    VATReg = ActiveWorkbook.Sheets("MTD").Range("C9").Value
+'get current filename/path
+    sUrl = ThisWorkbook.FullName
+    params = periodKey & " " & vatDueSales & " " & vatDueAcquisitions & " " & totalVatDue & " " & vatReclaimedCurrPeriod & " " & netVatDue & " " & totalValueSalesExVAT & " " & totalValuePurchasesExVAT & " " & totalValueGoodsSuppliedExVAT & " " & totalAcquisitionsExVAT & " " & VATReg & " " & sUrl
+'    MsgBox (params)
+' launch python script passing in VAT return data
+    ret = Shell("python C:\Users\barna\Desktop\MTD\mtd_vat_return1.py " & params, 1)
+' use shell command below to debug, i.e. leave DOS cmd window open
+'    ret = Shell(Environ$("COMSPEC") & " /k " & "python C:\Users\barna\Desktop\MTD\mtd_vat_return1.py " & params, 1)
+' wait until results file has been created, i.e. until pythonscript has completed
+    Do While Dir(resultFilePath) = ""
+' wait a second before testing again
+        Application.Wait (Now + TimeValue("0:00:01"))
+    Loop
+' wait 1 sec to ensure resultsfile contents has been written and file closed
+    Application.Wait (Now + TimeValue("0:00:01"))
+' open the filingResult.tx file
+    FileNum = FreeFile()
+    Open resultFilePath For Input As #FileNum
+' the file will contain a max of 6 lines, so read them in
+    Line Input #FileNum, status ' read in status code
+    Line Input #FileNum, period
+    Line Input #FileNum, processingDate
+    Line Input #FileNum, paymentIndicator
+    Line Input #FileNum, formBundleNumber
+' sometimes on succes there is no chargeRefNumber
+    If Not EOF(FileNum) Then
+        Line Input #FileNum, chargeRefNumber
+    Else
+        chargeRefNumber = ""
+    End If
+' close text file
+    Close FileNum
+' debug    MsgBox ("status=" & status & " period=" & period & " processingDate=" & processingDate & " paymentIndicator=" & paymentIndicator & " formBundleNumber=" & formBundleNumber & " chargeRefNumber=" & chargeRefNumber)
+' update the MTD result cells
+    If StrComp(status, "201") = 0 Then
+        If StrComp(period, "Q1") = 0 Then
+            ActiveWorkbook.Sheets("MTD").Range("K4").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("K4") = processingDate
+            ActiveWorkbook.Sheets("MTD").Range("L4").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("L4") = paymentIndicator
+            ActiveWorkbook.Sheets("MTD").Range("M4").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("M4") = formBundleNumber
+            ActiveWorkbook.Sheets("MTD").Range("N4").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("N4") = chargeRefNumber
+        ElseIf StrComp(period, "Q2") = 0 Then
+            ActiveWorkbook.Sheets("MTD").Range("K5").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("K5") = processingDate
+            ActiveWorkbook.Sheets("MTD").Range("L5").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("L5") = paymentIndicator
+            ActiveWorkbook.Sheets("MTD").Range("M5").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("M5") = formBundleNumber
+            ActiveWorkbook.Sheets("MTD").Range("N5").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("N5") = chargeRefNumber
+        ElseIf StrComp(period, "Q3") = 0 Then
+            ActiveWorkbook.Sheets("MTD").Range("K6").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("K6") = processingDate
+            ActiveWorkbook.Sheets("MTD").Range("L6").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("L6") = paymentIndicator
+            ActiveWorkbook.Sheets("MTD").Range("M6").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("M6") = formBundleNumber
+            ActiveWorkbook.Sheets("MTD").Range("N6").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("N6") = chargeRefNumber
+        Else
+            ActiveWorkbook.Sheets("MTD").Range("K7").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("K7") = processingDate
+            ActiveWorkbook.Sheets("MTD").Range("L7").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("L7") = paymentIndicator
+            ActiveWorkbook.Sheets("MTD").Range("M7").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("M7") = formBundleNumber
+            ActiveWorkbook.Sheets("MTD").Range("N7").NumberFormat = "0"
+            ActiveWorkbook.Sheets("MTD").Range("N7") = chargeRefNumber
+        End If
+        ActiveWorkbook.Sheets("MTD").Range("K8").NumberFormat = "Text"
+        ActiveWorkbook.Sheets("MTD").Range("K8").Font.Bold = True
+        ActiveWorkbook.Sheets("MTD").Range("K8").Font.Color = vbGreen
+        ActiveWorkbook.Sheets("MTD").Range("K8") = "Success"
+        ActiveWorkbook.Sheets("MTD").Range("L8") = ""
+        ActiveWorkbook.Sheets("MTD").Range("M8") = ""
+        ActiveWorkbook.Sheets("MTD").Range("N8") = ""
+    Else
+        ActiveWorkbook.Sheets("MTD").Range("K8").NumberFormat = "Text"
+        ActiveWorkbook.Sheets("MTD").Range("K8").Font.Bold = True
+        ActiveWorkbook.Sheets("MTD").Range("K8").Font.Color = vbRed
+        ActiveWorkbook.Sheets("MTD").Range("K8") = processingDate
+        ActiveWorkbook.Sheets("MTD").Range("L8").NumberFormat = "Text"
+        ActiveWorkbook.Sheets("MTD").Range("L8").Font.Bold = True
+        ActiveWorkbook.Sheets("MTD").Range("L8").Font.Color = vbRed
+        ActiveWorkbook.Sheets("MTD").Range("L8") = paymentIndicator
+        ActiveWorkbook.Sheets("MTD").Range("M8").NumberFormat = "Text"
+        ActiveWorkbook.Sheets("MTD").Range("M8").Font.Bold = True
+        ActiveWorkbook.Sheets("MTD").Range("M8").Font.Color = vbRed
+        ActiveWorkbook.Sheets("MTD").Range("M8") = formBundleNumber
+        ActiveWorkbook.Sheets("MTD").Range("N8").NumberFormat = "Text"
+        ActiveWorkbook.Sheets("MTD").Range("N8").Font.Bold = True
+        ActiveWorkbook.Sheets("MTD").Range("N8").Font.Color = vbRed
+        ActiveWorkbook.Sheets("MTD").Range("N8") = chargeRefNumber
+    End If
+End Sub
+
+
+
+
+
