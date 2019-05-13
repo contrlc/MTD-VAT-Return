@@ -66,6 +66,7 @@ from datetime import datetime
 import time
 import os
 import re
+from http.cookiejar import EPOCH_YEAR
 
 VERSION = '1.0'
 
@@ -107,16 +108,25 @@ def readCredentialsData(filepathname, periodKey, filename, opt):
         return client_id, client_secret, server_token  
     
 def fileReturn(periodKey, vatDueSales, vatDueAcquisitions, totalVatDue, vatReclaimedCurrPeriod, netVatDue, totalValueSalesExVAT, totalValuePurchasesExVAT, totalValueGoodsSuppliedExVAT, totalAcquisitionsExVAT, VATReg, access_token, api_url, opt):
-    # convert period key
-    if periodKey == "Q1":
-        period = "Q001"
-    elif periodKey == "Q2":
-        period = "Q002"
-    elif periodKey == "Q3":
-        period = "Q003"
-    else:
-        period = "Q004"    
-    print(VATReg)
+    # for sandbox testing, force different period keys to allow testing of all 4 quarters
+    if opt.SANDBOX:
+        # convert period key
+        if periodKey == "Q1":   
+            period = "Q001"
+        elif periodKey == "Q2":
+            period = "Q002"
+        elif periodKey == "Q3":
+            period = "Q003"
+        else:
+            period = "Q004"    
+    else:  
+        # for production period key use MMYY format where MM is numeric value of current month, and yy is last 2 digits if current year
+        month = datetime.now().strftime('%m')
+        year = datetime.now().strftime('%y')
+        period = month + year
+    if opt.DEBUG:
+        print ("period key calc'd to be: " + periodKey)
+        print("VAT REG=" + VATReg)
     args = "periodKey="+period+", vatDueSales="+vatDueSales+", vatDueAcquisitions="+vatDueAcquisitions+", totalVatDue="+totalVatDue+", vatReclaimedCurrPeriod="+vatReclaimedCurrPeriod+", netVatDue="+netVatDue+", totalValueSalesExVAT="+totalValueSalesExVAT+", totalValuePurchasesExVAT="+totalValuePurchasesExVAT+", totalValueGoodsSuppliedExVAT="+totalValueGoodsSuppliedExVAT+", totalAcquisitionsExVAT="+totalAcquisitionsExVAT+", VATReg="+VATReg
     if opt.DEBUG:
         print (args)
@@ -138,6 +148,7 @@ def fileReturn(periodKey, vatDueSales, vatDueAcquisitions, totalVatDue, vatRecla
     req = urllib.request.Request('http://icanhazip.com', data=None)  
     response = urllib.request.urlopen(req, timeout=5)  
     ipaddr = str(response.read())
+    # public IP address of PC/laptop
     pub_ipaddr = ipaddr.strip('\n')
     # get user     
     userhome = os.path.expanduser('~')          
@@ -402,7 +413,7 @@ def main(argv):
             return saveResult(filepathname, 400, "Q1", "ERROR: invalid number of arguments", "", "", "")
     if opt.DEBUG:
         print_args = "periodKey="+periodKey+", vatDueSales="+vatDueSales+", vatDueAcquisitions="+vatDueAcquisitions+", totalVatDue="+totalVatDue+", vatReclaimedCurrPeriod="+vatReclaimedCurrPeriod+", netVatDue="+netVatDue+", totalValueSalesExVAT="+totalValueSalesExVAT+", totalValuePurchasesExVAT="+totalValuePurchasesExVAT+", totalValueGoodsSuppliedExVAT="+totalValueGoodsSuppliedExVAT+", totalAcquisitionsExVAT="+totalAcquisitionsExVAT+", VATReg="+VATReg+", filepathname=",filepathname
-        print (print_args)       
+        print (print_args)   
     # extract filename/path
     filepathname = urllib.parse.unquote(filepathname)
     filepathname = filepathname.strip("file:")
@@ -422,6 +433,8 @@ def main(argv):
     # check for valid client_id
     if not client_id:
         return saveResult(filepathname, 400, "invalid client_id", "", "", "", "")
+    if opt.DEBUG:
+        print ("client_id=" + client_id + ", client_secret=" + client_secret + ", server_token=" + server_token)
     #authorization request
     auth = authorization_request(authorization_url, client_id, opt)
     # check authorisation was successful
